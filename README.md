@@ -49,6 +49,8 @@ CatLog MCP 也会尽量减少控制层泄露的信息：Companion 健康状态�
 
 浏览器扩展和 CatLog Companion 是前置依赖，不包含在这个仓库里。
 
+浏览器端已经单独公开：[`尾痕 | CatLog`](https://github.com/G-Raser/cat-chat-rescuer)（仓库名 `cat-chat-rescuer`）。它包含桌面 Extension 和 Mobile userscript，用当前已登录的 ChatGPT 浏览器状态读取并导出对话。CatLog Companion 仍作为本机前置组件，与这个 MCP 控制层分开。
+
 ## 工具
 
 | 工具 | 用途 |

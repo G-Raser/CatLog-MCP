@@ -49,6 +49,8 @@ CatLog MCP also minimizes control-plane disclosure: Companion health is reduced 
 
 The browser extension and Companion are prerequisites and are not bundled in this repository.
 
+The browser-side project is already public as [`尾痕 | CatLog`](https://github.com/G-Raser/cat-chat-rescuer) (repository name: `cat-chat-rescuer`). It includes the desktop Extension and Mobile userscript, which read and export conversations using the currently signed-in ChatGPT browser session. CatLog Companion remains a separate local prerequisite from this MCP control plane.
+
 ## Tools
 
 | Tool | Purpose |
