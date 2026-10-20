@@ -51,6 +51,39 @@ Review every hit manually. Documentation words such as secret or token are expec
 
 Also search for known private domain suffixes, usernames, archive-drive names, and internal project names.
 
+## Reachable-history scan
+
+Scanning only the current checkout is not enough. Review every commit that will be published.
+
+A practical PowerShell pattern:
+
+~~~powershell
+$patterns = @(
+  'api[_-]?key',
+  'token',
+  'password',
+  'cookie',
+  'session',
+  'plugin_',
+  'conversation_id',
+  'project_id',
+  'mcp-[A-Za-z0-9_-]{20,}',
+  '100\.[0-9]+\.[0-9]+\.[0-9]+',
+  '10\.[0-9]+\.[0-9]+\.[0-9]+'
+)
+
+foreach ($commit in git rev-list --all) {
+  foreach ($pattern in $patterns) {
+    git grep -n -I -E -- $pattern $commit 2>$null
+  }
+}
+~~~
+
+Review every hit manually. Documentation words and placeholders are expected; live deployment values are not.
+
+Also search explicitly for every private domain suffix, local username, archive-drive name, overlay-network address, or internal project name known to have been used in the deployment.
+
+Optional secret scanners such as Gitleaks can add another layer, but they do not replace manual review of deployment-specific identifiers.
 ## Git history matters
 
 A file deleted from the latest commit still exists in Git history.

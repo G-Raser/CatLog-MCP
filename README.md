@@ -161,6 +161,7 @@ For a real end-to-end validation, also verify:
 
 ## Documentation map
 
+- docs/END_TO_END_RUNBOOK.md — clean-machine setup, ChatGPT registration, smoke tests, daily workflows, recovery, and publication procedure
 - docs/ARCHITECTURE.md — components, trust boundaries, data flow
 - docs/CHATGPT_SETUP.md — custom MCP/App-backed setup and permissions
 - docs/OPERATIONS.md — daily operation and archive workflows
