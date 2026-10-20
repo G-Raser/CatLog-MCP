@@ -25,6 +25,8 @@ try {
       bind_host = "127.0.0.1"
       mcp_path = "/mcp-$secret"
       companion_url = "http://127.0.0.1:43129"
+      allowed_origins = @()
+      bearer_token = ""
     } | ConvertTo-Json
     [IO.File]::WriteAllText($configPath, $configJson, [Text.UTF8Encoding]::new($false))
   }

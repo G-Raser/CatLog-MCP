@@ -38,6 +38,8 @@ In ChatGPT:
 
 For a deployment with no application-layer auth, the UI may use wording such as No authentication. That does not make the endpoint safe by itself; upstream network or proxy controls still matter.
 
+If the client and deployment support a static bearer credential, configure the same secret in CatLog MCP and the client. Do not force bearer mode when the client cannot send the header. CatLog's browser-Origin protection is independent of this choice and does not normally affect ChatGPT's server-to-server MCP connection.
+
 ## Set plugin-specific permissions
 
 After connecting:

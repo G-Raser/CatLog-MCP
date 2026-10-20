@@ -25,3 +25,26 @@ test("server defaults to loopback but supports an explicit private bind host", a
   assert.match(source, /disk\.bind_host \?\? "127\.0\.0\.1"/);
   assert.match(source, /app\.listen\(options\.port, options\.bindHost/);
 });
+
+test("server rejects unapproved browser origins on every MCP transport method", async () => {
+  const source = await fs.readFile(new URL("../server.mjs", import.meta.url), "utf8");
+  assert.match(source, /if \(origin && !options\.allowedOrigins\.includes\(origin\)\)/);
+  assert.match(source, /app\.post\(options\.mcpPath, protectMcpRoute/);
+  assert.match(source, /app\.get\(options\.mcpPath, protectMcpRoute/);
+  assert.match(source, /app\.delete\(options\.mcpPath, protectMcpRoute/);
+});
+
+test("server supports optional bearer auth without logging the secret MCP path", async () => {
+  const source = await fs.readFile(new URL("../server.mjs", import.meta.url), "utf8");
+  assert.match(source, /CATLOG_MCP_BEARER_TOKEN/);
+  assert.match(source, /timingSafeEqual/);
+  assert.match(source, /WWW-Authenticate/);
+  assert.match(source, /MCP path hidden/);
+  assert.doesNotMatch(source, /listening on http:\/\/\$\{options\.bindHost\}:\$\{options\.port\}\$\{options\.mcpPath\}/);
+});
+
+test("malformed runtime config fails closed instead of silently falling back", async () => {
+  const source = await fs.readFile(new URL("../server.mjs", import.meta.url), "utf8");
+  assert.match(source, /error\?\.code !== "ENOENT"/);
+  assert.match(source, /Failed to load CatLog MCP config/);
+});

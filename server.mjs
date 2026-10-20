@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -21,7 +21,7 @@ function parseArgs(argv) {
     port: null,
     bindHost: null,
     mcpPath: null,
-    companionUrl: "http://127.0.0.1:43129",
+    companionUrl: null,
     triggerTimeoutMs: 240000,
     pollMs: 750
   };
@@ -38,6 +38,18 @@ function parseArgs(argv) {
   return out;
 }
 
+function normalizeAllowedOrigins(value) {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return raw.map((item) => String(item).trim()).filter(Boolean).map((item) => {
+    let parsed;
+    try { parsed = new URL(item); } catch { throw new Error(`Invalid allowed origin: ${item}`); }
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.origin !== item.replace(/\/$/, "")) {
+      throw new Error(`Invalid allowed origin: ${item}`);
+    }
+    return parsed.origin;
+  });
+}
+
 async function loadConfig() {
   const args = parseArgs(process.argv.slice(2));
   let disk = {};
@@ -45,14 +57,28 @@ async function loadConfig() {
     let raw = await fs.readFile(configPath, "utf8");
     if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
     disk = JSON.parse(raw);
-  } catch {}
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw new Error(`Failed to load CatLog MCP config: ${error?.message || error}`);
+  }
   const port = args.port ?? Number(disk.port || 32188);
   const bindHost = args.bindHost ?? disk.bind_host ?? "127.0.0.1";
   const mcpPath = args.mcpPath ?? disk.mcp_path ?? "/mcp";
-  const companionUrl = args.companionUrl || disk.companion_url || "http://127.0.0.1:43129";
+  const companionUrl = args.companionUrl ?? disk.companion_url ?? "http://127.0.0.1:43129";
+  const bearerToken = String(process.env.CATLOG_MCP_BEARER_TOKEN ?? disk.bearer_token ?? "").trim();
+  const allowedOrigins = normalizeAllowedOrigins(process.env.CATLOG_MCP_ALLOWED_ORIGINS ?? disk.allowed_origins ?? []);
+  let parsedCompanion;
+  try { parsedCompanion = new URL(companionUrl); } catch { throw new Error("Invalid companion_url"); }
+  const loopbackCompanionHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+  if (parsedCompanion.protocol !== "http:" || !loopbackCompanionHosts.has(parsedCompanion.hostname)) {
+    throw new Error("companion_url must use HTTP on a loopback host");
+  }
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid MCP port");
   if (!/^\/[A-Za-z0-9_-]+$/.test(mcpPath)) throw new Error("Invalid MCP path");
-  return { ...args, port, bindHost, mcpPath, companionUrl: companionUrl.replace(/\/$/, "") };
+  if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(bindHost) && mcpPath === "/mcp") {
+    throw new Error("A non-loopback bind requires a randomized MCP path");
+  }
+  if (bearerToken && bearerToken.length < 24) throw new Error("bearer_token must be at least 24 characters when configured");
+  return { ...args, port, bindHost, mcpPath, companionUrl: parsedCompanion.toString().replace(/\/$/, ""), bearerToken, allowedOrigins };
 }
 
 const options = await loadConfig();
@@ -67,8 +93,58 @@ function errorResult(error) {
   return { content: [{ type: "text", text: error?.message || String(error) }], isError: true };
 }
 
+function looksLikeLocalPath(value) {
+  return typeof value === "string" && (
+    /^[A-Za-z]:[\\/]/.test(value) ||
+    /^\\\\/.test(value) ||
+    /^\/(?:Users|home|root|mnt|var|tmp)\//.test(value)
+  );
+}
+
+function sanitizeControlMetadata(value) {
+  if (Array.isArray(value)) return value.map(sanitizeControlMetadata);
+  if (!value || typeof value !== "object") return looksLikeLocalPath(value) ? "[redacted-local-path]" : value;
+  const out = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (/(^|_)(?:path|root|directory|dir)$/i.test(key)) continue;
+    out[key] = sanitizeControlMetadata(item);
+  }
+  return out;
+}
+
+function publicCompanionHealth(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    ok: Boolean(value.ok),
+    service: value.service || "CatLog Companion",
+    version: value.version || null
+  };
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function safeEqualText(actual, expected) {
+  const left = Buffer.from(String(actual || ""));
+  const right = Buffer.from(String(expected || ""));
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function protectMcpRoute(req, res, next) {
+  const origin = req.get("origin");
+  if (origin && !options.allowedOrigins.includes(origin)) {
+    return res.status(403).json({ error: "Origin not allowed" });
+  }
+  if (options.bearerToken) {
+    const supplied = req.get("authorization");
+    const expected = `Bearer ${options.bearerToken}`;
+    if (!safeEqualText(supplied, expected)) {
+      res.set("WWW-Authenticate", "Bearer");
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+  }
+  next();
 }
 
 function validateConversationId(value) {
@@ -255,7 +331,7 @@ async function startBatch(args) {
           wait: true,
           timeout_ms: args.timeout_ms
         });
-        job.items.push({ conversation_id: item.conversation_id, ok: true, result });
+        job.items.push({ conversation_id: item.conversation_id, ok: true, result: sanitizeControlMetadata(result) });
         job.completed += 1;
       } catch (error) {
         job.items.push({ conversation_id: item.conversation_id, ok: false, error: error?.message || String(error) });
@@ -373,25 +449,25 @@ async function callTool(name, args) {
     try { companionHealth = await health(); } catch (error) { companionError = error?.message || String(error); }
     return {
       ok: Boolean(companionHealth?.ok),
-      companion: companionHealth,
+      companion: publicCompanionHealth(companionHealth),
       companion_error: companionError,
       batch_jobs: [...jobs.values()].slice(-10).map(({ items, ...job }) => ({ ...job, item_count: items.length }))
     };
   }
   if (name === "catlog_find_message") return await findMessage(args);
-  if (name === "catlog_archive_conversation") return await archiveConversation(args);
+  if (name === "catlog_archive_conversation") return sanitizeControlMetadata(await archiveConversation(args));
   if (name === "catlog_archive_many") return await startBatch(args);
   if (name === "catlog_job_status") {
     const job = jobs.get(String(args.job_id || ""));
     if (!job) throw new Error("Unknown MCP batch job_id");
     return job;
   }
-  if (name === "catlog_trigger_status") return await triggerStatus(String(args.job_id || ""));
+  if (name === "catlog_trigger_status") return sanitizeControlMetadata(await triggerStatus(String(args.job_id || "")));
   throw new Error(`Unknown tool: ${name}`);
 }
 
 function makeServer() {
-  const server = new Server({ name: "catlog-mcp", version: "0.1.0" }, { capabilities: { tools: {} } });
+  const server = new Server({ name: "catlog-mcp", version: "0.1.1" }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: tools() }));
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try { return textResult(await callTool(request.params.name, request.params.arguments || {})); }
@@ -406,13 +482,13 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/healthz", async (_req, res) => {
   try {
     const companionHealth = await health();
-    res.json({ ok: true, service: "catlog-mcp", version: "0.1.0", companion_ok: Boolean(companionHealth?.ok) });
+    res.json({ ok: true, service: "catlog-mcp", version: "0.1.1", companion_ok: Boolean(companionHealth?.ok) });
   } catch (error) {
-    res.status(503).json({ ok: false, service: "catlog-mcp", version: "0.1.0", companion_ok: false, error: error?.message || String(error) });
+    res.status(503).json({ ok: false, service: "catlog-mcp", version: "0.1.1", companion_ok: false });
   }
 });
 
-app.post(options.mcpPath, async (req, res) => {
+app.post(options.mcpPath, protectMcpRoute, async (req, res) => {
   try {
     const sessionId = req.headers["mcp-session-id"];
     let transport = sessionId ? transports.get(sessionId) : null;
@@ -441,10 +517,10 @@ async function sessionRequest(req, res) {
   if (!transport) return res.status(400).json({ error: "Unknown or missing MCP session" });
   await transport.handleRequest(req, res);
 }
-app.get(options.mcpPath, sessionRequest);
-app.delete(options.mcpPath, sessionRequest);
+app.get(options.mcpPath, protectMcpRoute, sessionRequest);
+app.delete(options.mcpPath, protectMcpRoute, sessionRequest);
 
 app.listen(options.port, options.bindHost, () => {
-  process.stdout.write(`catlog-mcp listening on http://${options.bindHost}:${options.port}${options.mcpPath}\n`);
+  process.stdout.write(`catlog-mcp listening on http://${options.bindHost}:${options.port} (MCP path hidden)\n`);
   process.stdout.write(`CatLog Companion: ${options.companionUrl}\n`);
 });

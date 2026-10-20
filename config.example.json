@@ -2,5 +2,7 @@
   "port": 32188,
   "bind_host": "127.0.0.1",
   "mcp_path": "/mcp-REPLACE_WITH_A_RANDOM_SECRET",
-  "companion_url": "http://127.0.0.1:43129"
+  "companion_url": "http://127.0.0.1:43129",
+  "allowed_origins": [],
+  "bearer_token": ""
 }

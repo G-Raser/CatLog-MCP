@@ -111,6 +111,8 @@ The raw JSON is expected to contain a ChatGPT-style mapping object whose nodes m
 
 ## Why the MCP reads the raw file path returned by Companion
 
-The Companion is already the source of truth for archive naming and layout. Returning the exact path avoids duplicating archive-discovery logic in the MCP layer.
+The Companion is already the source of truth for archive naming and layout. Returning the exact path to the local MCP process avoids duplicating archive-discovery logic in the MCP layer.
 
-This also means the Companion is a trusted local component. Do not point CatLog MCP at an untrusted remote Companion.
+That path is internal control metadata. CatLog MCP uses it locally for `catlog_find_message`, but strips local path/root fields from archive, batch, and trigger results before returning those control results to the MCP client.
+
+This also means the Companion is a trusted local component. CatLog MCP validates `companion_url` at startup and accepts only HTTP loopback hosts.

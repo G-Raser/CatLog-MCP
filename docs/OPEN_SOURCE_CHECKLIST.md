@@ -7,6 +7,7 @@ Run this checklist before changing repository visibility to public.
 - real MCP endpoint URLs
 - randomized MCP paths
 - tunnel tokens or tunnel configuration containing private routes
+- CatLog MCP bearer tokens or other access-control secrets
 - browser cookies or session tokens
 - API keys
 - archive contents
@@ -94,6 +95,7 @@ Before making a repository public:
 2. verify no earlier commit contained a live credential, private archive, or endpoint path
 3. if a secret ever entered history, rotate it even if history is rewritten
 4. if necessary, rewrite history before publication
+5. inspect author and committer names/email addresses in `git log`; switch future commits to a GitHub noreply address if direct email exposure is unwanted
 
 This repository was designed to start from a sanitized first commit so publication review stays simple.
 
@@ -102,6 +104,8 @@ This repository was designed to start from a sanitized first commit so publicati
 The real config lives outside Git.
 
 setup.ps1 generates the randomized MCP path. Treat that path as credential-like deployment data.
+
+If bearer authentication is enabled, keep `bearer_token` in the external runtime config or secret injection environment. Never copy the live value into `config.example.json`, screenshots, issues, or documentation.
 
 Do not add the real config back to the repository for convenience.
 

@@ -30,6 +30,8 @@ Conversation archive + index
 
 The important trust boundary is that CatLog Companion stays local. A remote MCP client should reach CatLog MCP only; it should never reach the Companion directly.
 
+CatLog MCP also minimizes control-plane disclosure: Companion health is reduced to public service/version/health fields, and local path/root metadata is removed from archive job results before those results are returned through MCP. Internal file paths remain available only inside the local process when `catlog_find_message` needs to read the fresh raw archive.
+
 ## What this repository contains
 
 - server.mjs — MCP server and six tools
@@ -38,6 +40,7 @@ The important trust boundary is that CatLog Companion stays local. A remote MCP 
 - install-startup.ps1 — optional Windows Scheduled Task
 - uninstall-startup.ps1 — removes that Scheduled Task
 - config.example.json — public-safe configuration example
+- CHANGELOG.md — release-level behavior and security changes
 - tests/ — lightweight source-level regression tests
 - docs/ — setup, operations, protocol, privacy, and maintainer notes
 
@@ -92,6 +95,13 @@ Invoke-RestMethod http://127.0.0.1:32188/healthz
 
 setup.ps1 creates a randomized MCP path in a config file outside the repository. Do not commit that file or paste the real path into public issues, screenshots, examples, or documentation.
 
+The config also supports two optional hardening fields:
+
+- `allowed_origins` — browser `Origin` values explicitly allowed to reach the MCP transport. Requests with no `Origin` header, such as normal server-to-server MCP traffic, are unaffected.
+- `bearer_token` — optional shared bearer token, at least 24 characters. Prefer the `CATLOG_MCP_BEARER_TOKEN` environment variable when secret injection is available.
+
+`CATLOG_MCP_ALLOWED_ORIGINS` can provide a comma-separated override for `allowed_origins`. By default the allowlist is empty, so any request that does send an `Origin` header is rejected.
+
 Configuration resolution order:
 
 1. CATLOG_MCP_CONFIG — exact config file path
@@ -105,7 +115,9 @@ The default bind host is 127.0.0.1. If the MCP client is not on the same machine
 
 Do not expose CatLog Companion itself.
 
-This server does not currently implement application-layer authentication. A randomized MCP path helps prevent accidental discovery, but it should not be treated as the only security boundary for an Internet-exposed service. Prefer a private network or an upstream access-control layer.
+The server supports optional bearer authentication, but it is intentionally disabled by default so existing private-network and upstream-auth deployments remain compatible. A randomized MCP path helps prevent accidental discovery, but it should not be treated as the only security boundary for an Internet-exposed service. Prefer a private network or an upstream access-control layer; enable the bearer token when the client can supply it.
+
+The MCP transport also rejects browser requests carrying an `Origin` header unless that exact origin is listed in `allowed_origins`. This reduces cross-origin and DNS-rebinding exposure without blocking ordinary server-to-server MCP clients that omit `Origin`.
 
 See docs/REMOTE_ACCESS.md and SECURITY.md.
 
