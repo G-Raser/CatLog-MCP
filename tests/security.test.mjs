@@ -87,6 +87,27 @@ test("runtime rejects unapproved Origin, enforces optional bearer auth, and hide
   }
 });
 
+test("non-loopback config rejects a short or guessable MCP path", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "catlog-mcp-test-"));
+  const configPath = path.join(dir, "config.json");
+  await fs.writeFile(configPath, JSON.stringify({
+    port: await freePort(),
+    bind_host: "0.0.0.0",
+    mcp_path: "/mcp-short",
+    companion_url: "http://127.0.0.1:43129"
+  }), "utf8");
+  const child = spawn(process.execPath, [serverPath], {
+    env: { ...process.env, CATLOG_MCP_CONFIG: configPath },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stderr = "";
+  child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+  const [code] = await once(child, "exit");
+  await fs.rm(dir, { recursive: true, force: true });
+  assert.notEqual(code, 0);
+  assert.match(stderr, /strong randomized MCP capability path/);
+});
+
 test("malformed config fails closed", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "catlog-mcp-test-"));
   const configPath = path.join(dir, "config.json");
@@ -101,6 +122,15 @@ test("malformed config fails closed", async () => {
   await fs.rm(dir, { recursive: true, force: true });
   assert.notEqual(code, 0);
   assert.match(stderr, /Failed to load CatLog MCP config/);
+});
+
+test("rotation helper generates a fresh 32-byte capability path and hides it by default", async () => {
+  const source = await fs.readFile(new URL("../rotate-mcp-path.ps1", import.meta.url), "utf8");
+  assert.match(source, /New-Object byte\[\] 32/);
+  assert.match(source, /RandomNumberGenerator/);
+  assert.match(source, /ShowNewPath/);
+  assert.match(source, /Do not paste it into public logs/);
+  assert.match(source, /Move-Item .* -Force/);
 });
 
 test("control metadata sanitizer removes local path keys and values from tool responses", async () => {

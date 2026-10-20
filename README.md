@@ -36,6 +36,7 @@ CatLog MCP also minimizes control-plane disclosure: Companion health is reduced 
 
 - server.mjs — MCP server and six tools
 - setup.ps1 — installs dependencies and creates an external config with a randomized MCP path
+- rotate-mcp-path.ps1 — rotates the private capability path in the external config when needed
 - start.ps1 — starts the server from that external config
 - install-startup.ps1 — optional Windows Scheduled Task
 - uninstall-startup.ps1 — removes that Scheduled Task
@@ -95,6 +96,10 @@ Invoke-RestMethod http://127.0.0.1:32188/healthz
 
 setup.ps1 creates a randomized MCP path in a config file outside the repository. Do not commit that file or paste the real path into public issues, screenshots, examples, or documentation.
 
+The randomized path is a capability URL: HTTPS provides transport encryption, while possession of the full unguessable path provides an additional access-control boundary. For non-loopback binds, CatLog MCP requires `/mcp-` followed by at least 40 URL-safe random characters; short or guessable paths are rejected at startup.
+
+To rotate the capability path later, run `./rotate-mcp-path.ps1`, restart CatLog MCP, then reconnect the MCP client with the new endpoint. The helper hides the new secret by default; use `-ShowNewPath` only when you are ready to reconnect the client.
+
 The config also supports two optional hardening fields:
 
 - `allowed_origins` — browser `Origin` values explicitly allowed to reach the MCP transport. Requests with no `Origin` header, such as normal server-to-server MCP traffic, are unaffected.
@@ -115,7 +120,7 @@ The default bind host is 127.0.0.1. If the MCP client is not on the same machine
 
 Do not expose CatLog Companion itself.
 
-The server supports optional bearer authentication, but it is intentionally disabled by default so existing private-network and upstream-auth deployments remain compatible. A randomized MCP path helps prevent accidental discovery, but it should not be treated as the only security boundary for an Internet-exposed service. Prefer a private network or an upstream access-control layer; enable the bearer token when the client can supply it.
+The server supports optional bearer authentication, but it is intentionally disabled by default so clients that cannot send a static Authorization header remain compatible. The randomized capability path is credential-like and is the compatible shared-secret boundary for those clients, but Internet-reachable deployments should still pair it with HTTPS and sensible network or reverse-proxy restrictions. Enable bearer authentication when the client can actually supply it.
 
 The MCP transport also rejects browser requests carrying an `Origin` header unless that exact origin is listed in `allowed_origins`. This reduces cross-origin and DNS-rebinding exposure without blocking ordinary server-to-server MCP clients that omit `Origin`.
 
@@ -135,6 +140,8 @@ The short version is:
 6. refresh tools
 7. run catlog_status
 8. run a real archive or message lookup as a smoke test
+
+In the currently verified ChatGPT custom MCP UI, the endpoint URL is not editable in place. If the capability path must be rotated, restart CatLog MCP with the new path, delete the old CatLog connection/app, and reconnect it using the new full URL.
 
 Do not confuse global ChatGPT permissions with the custom plugin's own permission page.
 

@@ -74,8 +74,9 @@ async function loadConfig() {
   }
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Invalid MCP port");
   if (!/^\/[A-Za-z0-9_-]+$/.test(mcpPath)) throw new Error("Invalid MCP path");
-  if (!["127.0.0.1", "localhost", "::1", "[::1]"].includes(bindHost) && mcpPath === "/mcp") {
-    throw new Error("A non-loopback bind requires a randomized MCP path");
+  const loopbackBindHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+  if (!loopbackBindHosts.has(bindHost) && !/^\/mcp-[A-Za-z0-9_-]{40,}$/.test(mcpPath)) {
+    throw new Error("A non-loopback bind requires a strong randomized MCP capability path");
   }
   if (bearerToken && bearerToken.length < 24) throw new Error("bearer_token must be at least 24 characters when configured");
   return { ...args, port, bindHost, mcpPath, companionUrl: parsedCompanion.toString().replace(/\/$/, ""), bearerToken, allowedOrigins };
@@ -467,7 +468,7 @@ async function callTool(name, args) {
 }
 
 function makeServer() {
-  const server = new Server({ name: "catlog-mcp", version: "0.1.1" }, { capabilities: { tools: {} } });
+  const server = new Server({ name: "catlog-mcp", version: "0.1.2" }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: tools() }));
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try { return textResult(await callTool(request.params.name, request.params.arguments || {})); }
@@ -482,9 +483,9 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/healthz", async (_req, res) => {
   try {
     const companionHealth = await health();
-    res.json({ ok: true, service: "catlog-mcp", version: "0.1.1", companion_ok: Boolean(companionHealth?.ok) });
+    res.json({ ok: true, service: "catlog-mcp", version: "0.1.2", companion_ok: Boolean(companionHealth?.ok) });
   } catch (error) {
-    res.status(503).json({ ok: false, service: "catlog-mcp", version: "0.1.1", companion_ok: false });
+    res.status(503).json({ ok: false, service: "catlog-mcp", version: "0.1.2", companion_ok: false });
   }
 });
 

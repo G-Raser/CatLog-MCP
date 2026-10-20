@@ -26,6 +26,13 @@ test("server defaults to loopback but supports an explicit private bind host", a
   assert.match(source, /app\.listen\(options\.port, options\.bindHost/);
 });
 
+
+test("non-loopback binds require a strong capability URL path", async () => {
+  const source = await fs.readFile(new URL("../server.mjs", import.meta.url), "utf8");
+  assert.match(source, /\/mcp-\[A-Za-z0-9_-\]\{40,/);
+  assert.match(source, /strong randomized MCP capability path/);
+});
+
 test("server rejects unapproved browser origins on every MCP transport method", async () => {
   const source = await fs.readFile(new URL("../server.mjs", import.meta.url), "utf8");
   assert.match(source, /if \(origin && !options\.allowedOrigins\.includes\(origin\)\)/);

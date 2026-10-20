@@ -21,7 +21,9 @@ CatLog MCP supports an optional shared bearer token through `bearer_token` or `C
 
 Browser requests that carry an `Origin` header are rejected unless the exact origin appears in `allowed_origins` or `CATLOG_MCP_ALLOWED_ORIGINS`. Requests without an `Origin` header remain compatible with normal server-to-server MCP clients.
 
-The randomized MCP path generated during setup is credential-like and must remain private, but path secrecy alone is not sufficient for an Internet-reachable deployment. Combine it with a private network, upstream identity/access control, or the optional bearer token.
+If the capability URL is exposed, rotate it with `rotate-mcp-path.ps1`, restart the service, remove the old client registration, and reconnect using the new URL. Treat the full endpoint exactly like a credential; do not publish it in logs, screenshots, issues, examples, or documentation.
+
+The randomized MCP path generated during setup is a capability URL and must remain private. HTTPS encrypts the transport; the unguessable path provides an additional possession-based access-control boundary. Non-loopback binds require a strong `/mcp-<random>` path with at least 40 URL-safe secret characters. For clients that cannot send a static bearer header, this capability URL is the compatible shared-secret mechanism, and it should still be combined with sensible network or reverse-proxy restrictions for Internet-reachable deployments.
 
 Control-plane responses are minimized before they leave the MCP server: Companion health omits archive-root details, and archive/trigger/batch metadata has local path/root fields removed. Message text returned by `catlog_find_message` is not altered by this sanitizer because returning matched conversation text is that tool's explicit purpose.
 

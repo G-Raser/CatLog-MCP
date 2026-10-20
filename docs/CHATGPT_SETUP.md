@@ -40,6 +40,19 @@ For a deployment with no application-layer auth, the UI may use wording such as 
 
 If the client and deployment support a static bearer credential, configure the same secret in CatLog MCP and the client. Do not force bearer mode when the client cannot send the header. CatLog's browser-Origin protection is independent of this choice and does not normally affect ChatGPT's server-to-server MCP connection.
 
+## Rotating the randomized endpoint
+
+The currently verified ChatGPT custom MCP UI does not provide an in-place endpoint URL editor. If the capability URL is exposed or otherwise needs rotation:
+
+1. run `./rotate-mcp-path.ps1 -ShowNewPath` and keep the printed path private
+2. restart CatLog MCP
+3. delete the old CatLog custom MCP connection/app in ChatGPT
+4. add CatLog again with the same HTTPS host and the new randomized path
+5. connect it, refresh tools, and run `catlog_status`
+6. verify the old endpoint now returns 404
+
+Do not rotate a healthy, uncompromised path merely for routine restarts. Rotation is a credential-change operation, not a normal startup step.
+
 ## Set plugin-specific permissions
 
 After connecting:

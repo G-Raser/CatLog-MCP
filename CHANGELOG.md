@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2 - 2026-10-20
+
+Capability-URL hardening and rotation support:
+
+- require a long `/mcp-<random>` capability path for every non-loopback bind
+- reject short or guessable remote MCP routes at startup
+- add `rotate-mcp-path.ps1` for cryptographically secure path rotation without storing secrets in the repository
+- document the current ChatGPT reconnect flow when an endpoint path is rotated
+- clarify that HTTPS encrypts transport while the randomized path acts as a credential-like access-control boundary
+
 ## 0.1.1 - 2026-10-20
 
 Security and privacy hardening for public release preparation:

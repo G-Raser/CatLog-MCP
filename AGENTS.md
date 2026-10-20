@@ -13,6 +13,7 @@ This repository is the MCP control plane for CatLog.
 - Do not duplicate conversation-fetch logic here.
 - Do not expose the Companion directly to remote clients.
 - Keep remote MCP URLs, randomized paths, tunnel configuration, archive locations, conversation IDs, and credentials outside the repository.
+- Treat the full randomized MCP capability URL as a credential. Non-loopback binds must require a long `/mcp-<random>` path; do not weaken this to a short or guessable route.
 - Do not return local filesystem paths or archive-root metadata through MCP control-plane responses; keep such paths internal to the local process.
 - Preserve the downstream archive/index format rather than inventing a second archive format.
 - Batch-job state is intentionally in memory unless durability is explicitly designed and documented.
