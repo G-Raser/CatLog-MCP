@@ -9,9 +9,11 @@ This repository is the MCP control plane for CatLog.
 - Keep browser-authenticated conversation fetching inside the local Companion/extension layer.
 - Do not add browser automation as a runtime dependency.
 - Reuse the Companion trigger/archive API on loopback.
+- Keep `companion_url` loopback-only; do not relax this without an explicit architecture/security decision.
 - Do not duplicate conversation-fetch logic here.
 - Do not expose the Companion directly to remote clients.
 - Keep remote MCP URLs, randomized paths, tunnel configuration, archive locations, conversation IDs, and credentials outside the repository.
+- Do not return local filesystem paths or archive-root metadata through MCP control-plane responses; keep such paths internal to the local process.
 - Preserve the downstream archive/index format rather than inventing a second archive format.
 - Batch-job state is intentionally in memory unless durability is explicitly designed and documented.
 
