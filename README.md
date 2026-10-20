@@ -1,4 +1,4 @@
-﻿# CatLog MCP
+# CatLog MCP
 
 CatLog MCP is a small Model Context Protocol control plane for a local CatLog archive stack.
 

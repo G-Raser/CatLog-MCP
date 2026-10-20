@@ -1,4 +1,4 @@
-﻿# Remote access
+# Remote access
 
 CatLog MCP defaults to loopback. Remote MCP clients need a secure path to it.
 

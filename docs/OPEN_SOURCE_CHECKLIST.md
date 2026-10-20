@@ -1,4 +1,4 @@
-﻿# Open-source privacy checklist
+# Open-source privacy checklist
 
 Run this checklist before changing repository visibility to public.
 

@@ -1,4 +1,4 @@
-﻿# Operations runbook
+# Operations runbook
 
 ## Normal startup
 

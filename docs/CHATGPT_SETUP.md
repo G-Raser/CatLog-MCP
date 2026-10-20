@@ -1,4 +1,4 @@
-﻿# ChatGPT custom MCP setup
+# ChatGPT custom MCP setup
 
 This document records the custom MCP/App-backed setup sequence that was verified on 2026-10-20. Product wording may change later, so treat exact labels as UI guidance rather than a permanent API contract.
 

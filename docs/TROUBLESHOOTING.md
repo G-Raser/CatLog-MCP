@@ -1,4 +1,4 @@
-﻿# Troubleshooting
+# Troubleshooting
 
 ## MCP client shows no CatLog tools
 

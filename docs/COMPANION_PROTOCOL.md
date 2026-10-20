@@ -1,4 +1,4 @@
-﻿# Companion protocol
+# Companion protocol
 
 CatLog MCP expects a local Companion service. This document describes the minimum contract used by server.mjs.
 
