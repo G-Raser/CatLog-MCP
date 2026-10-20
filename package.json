@@ -1,0 +1,16 @@
+﻿{
+  "name": "catlog-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP control plane for a local CatLog Companion archive service.",
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "express": "4.22.3"
+  }
+}
