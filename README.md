@@ -1,167 +1,177 @@
 # CatLog MCP
 
-CatLog MCP is a small Model Context Protocol control plane for a local CatLog archive stack.
+**简体中文** | [English](./README_EN.md)
 
-Its job is deliberately narrow: expose a stable MCP tool surface, hand archive requests to a local Companion service, wait for the browser-authenticated archive job when needed, and return structured results to the MCP client.
+CatLog MCP 是一个给本地 CatLog 归档栈使用的小型 Model Context Protocol（MCP）控制层。
 
-The project does not fetch ChatGPT conversations itself and does not depend on browser automation at runtime.
+它的职责刻意保持得很窄：对 MCP 客户端提供稳定的工具接口，把归档请求交给本机 Companion，在需要时等待浏览器认证后的归档任务完成，再把结构化结果返回给 MCP 客户端。
 
-## Architecture
+CatLog MCP 自己不会直接抓取 ChatGPT 对话，运行时也不依赖浏览器自动化。
+
+## 架构
 
 ~~~text
-MCP client
+MCP 客户端
   |
   | Streamable HTTP
   v
 CatLog MCP
   |
-  | loopback control API
+  | 本机 loopback 控制 API
   v
 CatLog Companion
   |
-  | local trigger queue
+  | 本地触发队列
   v
-Browser extension in an already logged-in browser
+已登录 ChatGPT 的浏览器扩展
   |
-  | authenticated conversation fetch
+  | 使用现有登录态读取对话
   v
-Conversation archive + index
+对话归档 + 索引
 ~~~
 
-The important trust boundary is that CatLog Companion stays local. A remote MCP client should reach CatLog MCP only; it should never reach the Companion directly.
+最重要的信任边界是：**CatLog Companion 始终留在本机。** 远程 MCP 客户端只应该访问 CatLog MCP，不应该直接访问 Companion。
 
-CatLog MCP also minimizes control-plane disclosure: Companion health is reduced to public service/version/health fields, and local path/root metadata is removed from archive job results before those results are returned through MCP. Internal file paths remain available only inside the local process when `catlog_find_message` needs to read the fresh raw archive.
+CatLog MCP 也会尽量减少控制层泄露的信息：Companion 健康状态只保留服务名、版本和健康状态；归档任务结果在经由 MCP 返回前，会移除本机路径和归档根目录等元数据。只有在 `catlog_find_message` 需要读取刚生成的原始归档时，本机文件路径才会留在进程内部使用。
 
-## What this repository contains
+## 仓库里有什么
 
-- server.mjs — MCP server and six tools
-- setup.ps1 — installs dependencies and creates an external config with a randomized MCP path
-- rotate-mcp-path.ps1 — rotates the private capability path in the external config when needed
-- start.ps1 — starts the server from that external config
-- install-startup.ps1 — optional Windows Scheduled Task
-- uninstall-startup.ps1 — removes that Scheduled Task
-- config.example.json — public-safe configuration example
-- CHANGELOG.md — release-level behavior and security changes
-- tests/ — lightweight source-level regression tests
-- docs/ — setup, operations, protocol, privacy, and maintainer notes
+- `server.mjs` — MCP 服务端和 6 个工具
+- `setup.ps1` — 安装依赖，并在仓库外创建带随机 MCP 路径的配置
+- `rotate-mcp-path.ps1` — 需要时轮换私有 capability path
+- `start.ps1` — 使用外部配置启动服务
+- `install-startup.ps1` — 可选的 Windows 计划任务安装脚本
+- `uninstall-startup.ps1` — 移除对应计划任务
+- `config.example.json` — 可以公开的配置示例
+- `CHANGELOG.md` — 版本级行为和安全变更
+- `tests/` — 轻量回归测试
+- `docs/` — 安装、运维、协议、隐私和维护文档
 
-The browser extension and Companion are prerequisites and are not bundled in this repository.
+浏览器扩展和 CatLog Companion 是前置依赖，不包含在这个仓库里。
 
-## Tools
+## 工具
 
-| Tool | Purpose |
+| 工具 | 用途 |
 | --- | --- |
-| catlog_status | Check Companion health and recent in-memory MCP batch jobs |
-| catlog_find_message | Fresh-read a conversation, archive it, then search the newly archived raw JSON |
-| catlog_archive_conversation | Fresh-read and archive one conversation |
-| catlog_archive_many | Start a sequential background batch for multiple conversations |
-| catlog_job_status | Read an MCP batch job |
-| catlog_trigger_status | Read the underlying Companion trigger job |
+| `catlog_status` | 查看 Companion 健康状态和最近的 MCP 内存批处理任务 |
+| `catlog_find_message` | 先 fresh-read 并归档一段对话，再搜索刚生成的原始 JSON |
+| `catlog_archive_conversation` | fresh-read 并归档一段对话 |
+| `catlog_archive_many` | 启动按顺序执行的后台批量归档 |
+| `catlog_job_status` | 查看一个 MCP 批处理任务 |
+| `catlog_trigger_status` | 查看底层 Companion trigger 任务 |
 
-### Freshness rule
+### Fresh-read 规则
 
-catlog_find_message intentionally archives first and searches second. This favors source freshness over speed and makes timestamp lookup reliable when the archive on disk might be stale.
+`catlog_find_message` 会刻意先归档、再搜索。这样会牺牲一点速度，但优先保证来源是最新的，避免磁盘上的旧归档导致时间戳或正文查错。
 
-### Batch durability
+### 批处理任务的持久性
 
-catlog_archive_many keeps its job state in memory. Restarting CatLog MCP loses MCP batch-job status. The underlying archives already completed by Companion remain on disk, but the MCP batch object is not durable.
+`catlog_archive_many` 的批处理状态保存在内存里。重启 CatLog MCP 后，MCP 这一层的批任务状态会丢失；已经由 Companion 完成并写入磁盘的归档不会消失。
 
-## Requirements
+## 环境要求
 
-- Windows for the included PowerShell setup/start scripts
-- Node.js 20 or newer
-- a compatible CatLog Companion on the same machine
-- a browser extension connected to that Companion and logged into ChatGPT
-- HTTPS reachability if the MCP client is remote
+- Windows（仓库自带的 setup/start 脚本使用 PowerShell）
+- Node.js 20 或更新版本
+- 同一台机器上运行兼容的 CatLog Companion
+- 浏览器扩展已连接 Companion，并在浏览器中登录 ChatGPT
+- 如果 MCP 客户端在远程，还需要可访问的 HTTPS 入口
 
-## Quick start
+## 快速开始
 
-1. Install dependencies and create the local config:
+1. 安装依赖并创建本地配置：
 
 ~~~powershell
 .\setup.ps1
 ~~~
 
-2. Start the server:
+2. 启动服务：
 
 ~~~powershell
 .\start.ps1
 ~~~
 
-3. Check local health:
+3. 检查本地健康状态：
 
 ~~~powershell
 Invoke-RestMethod http://127.0.0.1:32188/healthz
 ~~~
 
-setup.ps1 creates a randomized MCP path in a config file outside the repository. Do not commit that file or paste the real path into public issues, screenshots, examples, or documentation.
+`setup.ps1` 会在**仓库之外**的配置文件中生成一条随机 MCP 路径。不要把真实路径提交进 Git，也不要把它贴到公开 issue、截图、示例或文档里。
 
-The randomized path is a capability URL: HTTPS provides transport encryption, while possession of the full unguessable path provides an additional access-control boundary. For non-loopback binds, CatLog MCP requires `/mcp-` followed by at least 40 URL-safe random characters; short or guessable paths are rejected at startup.
+这条随机路径属于 **capability URL**：HTTPS 负责加密传输；完整且不可猜的随机路径则充当一层“持有即有访问资格”的秘密入口。只要 CatLog MCP 绑定到非 loopback 地址，路径就必须是 `/mcp-` 加至少 40 位 URL-safe 随机字符；短路径或容易猜的路径会在启动时直接被拒绝。
 
-To rotate the capability path later, run `./rotate-mcp-path.ps1`, restart CatLog MCP, then reconnect the MCP client with the new endpoint. The helper hides the new secret by default; use `-ShowNewPath` only when you are ready to reconnect the client.
+如果以后真的需要轮换路径，可以运行：
 
-The config also supports two optional hardening fields:
+~~~powershell
+.\rotate-mcp-path.ps1
+~~~
 
-- `allowed_origins` — browser `Origin` values explicitly allowed to reach the MCP transport. Requests with no `Origin` header, such as normal server-to-server MCP traffic, are unaffected.
-- `bearer_token` — optional shared bearer token, at least 24 characters. Prefer the `CATLOG_MCP_BEARER_TOKEN` environment variable when secret injection is available.
+然后重启 CatLog MCP，并让 MCP 客户端使用新的完整 URL 重新连接。脚本默认不会把新 secret 打出来；只有准备好重新连接时，才使用 `-ShowNewPath`。
 
-`CATLOG_MCP_ALLOWED_ORIGINS` can provide a comma-separated override for `allowed_origins`. By default the allowlist is empty, so any request that does send an `Origin` header is rejected.
+配置还支持两个可选的安全字段：
 
-Configuration resolution order:
+- `allowed_origins` — 明确允许访问 MCP transport 的浏览器 `Origin`。正常的 server-to-server MCP 请求通常没有 `Origin`，不受影响。
+- `bearer_token` — 可选共享 Bearer Token，至少 24 个字符。支持环境变量注入时，优先使用 `CATLOG_MCP_BEARER_TOKEN`。
 
-1. CATLOG_MCP_CONFIG — exact config file path
-2. CATLOG_MCP_STATE_DIR — directory containing config.json
-3. %LOCALAPPDATA%\CatLogMCP\config.json on Windows
-4. ~/.catlog-mcp/config.json when LOCALAPPDATA is unavailable
+`CATLOG_MCP_ALLOWED_ORIGINS` 可以用逗号分隔的形式覆盖 `allowed_origins`。默认 allowlist 为空，因此任何真的携带浏览器 `Origin` 的请求都会被拒绝。
 
-## Remote access
+配置查找顺序：
 
-The default bind host is 127.0.0.1. If the MCP client is not on the same machine, place a restricted reverse proxy, tunnel, or private network in front of CatLog MCP.
+1. `CATLOG_MCP_CONFIG` — 指定完整配置文件路径
+2. `CATLOG_MCP_STATE_DIR` — 指定包含 `config.json` 的目录
+3. Windows 上的 `%LOCALAPPDATA%\CatLogMCP\config.json`
+4. 没有 `LOCALAPPDATA` 时使用 `~/.catlog-mcp/config.json`
 
-Do not expose CatLog Companion itself.
+## 远程访问
 
-The server supports optional bearer authentication, but it is intentionally disabled by default so clients that cannot send a static Authorization header remain compatible. The randomized capability path is credential-like and is the compatible shared-secret boundary for those clients, but Internet-reachable deployments should still pair it with HTTPS and sensible network or reverse-proxy restrictions. Enable bearer authentication when the client can actually supply it.
+默认监听地址是 `127.0.0.1`。如果 MCP 客户端不在同一台机器上，应该在 CatLog MCP 前面放受限制的反向代理、隧道或私有网络。
 
-The MCP transport also rejects browser requests carrying an `Origin` header unless that exact origin is listed in `allowed_origins`. This reduces cross-origin and DNS-rebinding exposure without blocking ordinary server-to-server MCP clients that omit `Origin`.
+**不要把 CatLog Companion 本身暴露到远程。**
 
-See docs/REMOTE_ACCESS.md and SECURITY.md.
+服务端支持可选 Bearer 认证，但默认关闭，以兼容无法发送固定 `Authorization` header 的客户端。对于这类客户端，随机 capability URL 本身就是兼容的共享秘密边界；如果服务从互联网可达，仍建议同时使用 HTTPS 和合理的网络/反向代理限制。只有客户端确实能发送 Bearer header 时，才开启 Bearer。
 
-## ChatGPT custom MCP setup
+MCP transport 还会拒绝带有未授权 `Origin` 的浏览器请求。这可以降低跨站请求和 DNS rebinding 风险，同时不会影响通常不带 `Origin` 的 server-to-server MCP 客户端。
 
-A tested App-backed custom MCP flow is documented in docs/CHATGPT_SETUP.md.
+更多说明见 `docs/REMOTE_ACCESS.md` 和 `SECURITY.md`。
 
-The short version is:
+## ChatGPT custom MCP 配置
 
-1. expose the CatLog MCP endpoint over HTTPS
-2. in ChatGPT, add a custom MCP server
-3. use the full endpoint including the randomized path
-4. connect the plugin/app
-5. set that plugin's own tool permission to the level you intend to allow
-6. refresh tools
-7. run catlog_status
-8. run a real archive or message lookup as a smoke test
+已经实际验证过的 App-backed custom MCP 流程记录在 `docs/CHATGPT_SETUP.md`。
 
-In the currently verified ChatGPT custom MCP UI, the endpoint URL is not editable in place. If the capability path must be rotated, restart CatLog MCP with the new path, delete the old CatLog connection/app, and reconnect it using the new full URL.
+简版流程：
 
-Do not confuse global ChatGPT permissions with the custom plugin's own permission page.
+1. 用 HTTPS 暴露 CatLog MCP endpoint
+2. 在 ChatGPT 中添加 custom MCP server
+3. 填写包含随机路径在内的完整 endpoint
+4. 连接 plugin/app
+5. 设置这个插件自己的工具权限
+6. Refresh tools
+7. 运行 `catlog_status`
+8. 再做一次真实归档或消息查询作为 smoke test
 
-## Privacy
+当前实际验证过的 ChatGPT custom MCP UI **不能原地修改 endpoint URL**。如果 capability path 需要轮换，就先让 CatLog MCP 使用新路径启动，再删除旧的 CatLog 连接/app，最后用新的完整 URL 重新添加。
 
-This repository is designed so private runtime values stay outside Git:
+不要把 ChatGPT 的全局权限设置和这个自定义插件自己的权限页混在一起。
 
-- no archive contents
-- no conversation IDs in examples
-- no browser cookies or session tokens
-- no real remote domain
-- no real tunnel route
-- no real MCP randomized path
-- no local archive directory
-- no plugin/app IDs
-- no personal filesystem paths
+## 隐私
 
-Before making the repository public, run the checklist in docs/OPEN_SOURCE_CHECKLIST.md.
+这个仓库的设计目标是：所有私有运行时数据都留在 Git 之外。
 
-## Development
+仓库中不应出现：
+
+- 对话归档正文
+- 示例里的真实 conversation ID
+- 浏览器 cookie 或 session token
+- 真实远程域名
+- 真实隧道路由
+- 真实随机 MCP path
+- 本地归档目录
+- plugin/app ID
+- 个人文件系统路径
+
+公开仓库前，可以运行 `docs/OPEN_SOURCE_CHECKLIST.md` 里的检查项。
+
+## 开发与验证
 
 ~~~powershell
 npm run check
@@ -169,27 +179,27 @@ npm test
 npm audit --omit=dev
 ~~~
 
-For a real end-to-end validation, also verify:
+如果要做真正的端到端验收，还应该确认：
 
-1. Companion health is OK
-2. MCP initialize succeeds
-3. tools/list returns all six CatLog tools
-4. a real conversation archive completes
-5. catlog_find_message can return an original create_time
-6. the returned local_time matches the requested IANA timezone
+1. Companion 健康
+2. MCP initialize 成功
+3. `tools/list` 返回全部 6 个 CatLog 工具
+4. 一次真实对话归档能完成
+5. `catlog_find_message` 能返回原始 `create_time`
+6. 返回的 `local_time` 与指定 IANA timezone 一致
 
-## Documentation map
+## 文档地图
 
-- docs/END_TO_END_RUNBOOK.md — clean-machine setup, ChatGPT registration, smoke tests, daily workflows, recovery, and publication procedure
-- docs/ARCHITECTURE.md — components, trust boundaries, data flow
-- docs/CHATGPT_SETUP.md — custom MCP/App-backed setup and permissions
-- docs/OPERATIONS.md — daily operation and archive workflows
-- docs/COMPANION_PROTOCOL.md — minimum Companion contract
-- docs/REMOTE_ACCESS.md — safe remote exposure patterns
-- docs/TROUBLESHOOTING.md — common failures and recovery
-- docs/OPEN_SOURCE_CHECKLIST.md — privacy review before publication
-- SECURITY.md — security model and disclosure notes
+- `docs/END_TO_END_RUNBOOK.md` — 干净环境安装、ChatGPT 注册、smoke test、日常流程、恢复和发布流程
+- `docs/ARCHITECTURE.md` — 组件、信任边界、数据流
+- `docs/CHATGPT_SETUP.md` — custom MCP / App-backed 配置与权限
+- `docs/OPERATIONS.md` — 日常运维与归档流程
+- `docs/COMPANION_PROTOCOL.md` — Companion 最小协议
+- `docs/REMOTE_ACCESS.md` — 安全远程访问模式
+- `docs/TROUBLESHOOTING.md` — 常见故障与恢复
+- `docs/OPEN_SOURCE_CHECKLIST.md` — 公开前隐私检查
+- `SECURITY.md` — 安全模型和漏洞报告说明
 
 ## License
 
-No open-source license has been selected yet. Add a LICENSE file before publishing the repository as an open-source project.
+当前没有提供明确的 LICENSE。仓库仍然可以公开；在没有额外许可证的情况下，默认适用通常的版权限制。
